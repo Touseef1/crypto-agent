@@ -1,0 +1,42 @@
+# CryptoBot — Phase 1
+
+Personal cryptocurrency **paper-trading** application. **No real trading is implemented.**
+
+## Requirements
+Node.js 20.9+ (22 recommended), npm, MySQL 8, optional phpMyAdmin.
+
+## Local setup
+1. `npm install`
+2. Copy `.env.example` to `.env` in the repository root; change `DATABASE_URL`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` (minimum 12 characters). Never commit `.env`.
+3. Create MySQL database and restricted user (adjust the password):
+   ```sql
+   CREATE DATABASE cryptobot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   CREATE USER 'cryptobot'@'localhost' IDENTIFIED BY 'change_this_password';
+   GRANT ALL PRIVILEGES ON cryptobot.* TO 'cryptobot'@'localhost';
+   ```
+4. `npm run db:generate`
+5. `npm run db:migrate` (requires running MySQL and valid credentials)
+6. `npm run db:seed` (safe to run repeatedly; does not reset balances)
+7. `npm run dev` and open `http://localhost:3000/login`.
+
+**Important:** Next.js reads environment variables from `apps/web/.env.local` or its process environment. For local development, copy root `.env` to `apps/web/.env.local` as well, or export the variables in your shell before starting Next.js. Root `.env` is used by Prisma CLI and seed script.
+
+## Useful commands
+- `npm run build`
+- `npm run typecheck`
+- `npm run test`
+- `npm run dev`
+- `npm run db:migrate`
+
+## phpMyAdmin
+Open `http://localhost/phpmyadmin`, log in with a MySQL user authorized to access `cryptobot`, and select the database. phpMyAdmin is a database administration UI, not the data store; MySQL stores all records.
+
+## Feature status
+- Phase 1: schema, authentication, seed and dashboard foundation implemented in source.
+- Phase 2: Binance market feeds **not implemented**.
+- Phase 3: automatic paper orders and risk engine **not implemented**.
+- Phase 4: backtesting **not implemented**.
+- Phase 5–6: full reporting and stabilization **not implemented**.
+
+Do not start the bot or rely on financial outputs until later phases are implemented and tested.
+# crypto-agent
