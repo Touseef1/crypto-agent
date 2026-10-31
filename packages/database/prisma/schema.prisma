@@ -1,25 +1,246 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "mysql" url = env("DATABASE_URL") }
-enum BotState { STOPPED STARTING RUNNING PAUSED ERROR }
-enum OrderSide { BUY SELL }
-enum OrderStatus { PENDING FILLED REJECTED CANCELLED }
-enum PositionStatus { OPEN CLOSED }
-model User { id String @id @default(cuid()) email String @unique @db.VarChar(191) passwordHash String isActive Boolean @default(true) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt accounts TradingAccount[] sessions Session[] audits AuditLog[] }
-model Session { id String @id @default(cuid()) userId String tokenHash String @unique @db.VarChar(64) expiresAt DateTime createdAt DateTime @default(now()) user User @relation(fields:[userId],references:[id],onDelete:Cascade) @@index([expiresAt]) }
-model LoginAttempt { id String @id @default(cuid()) email String @db.VarChar(191) createdAt DateTime @default(now()) @@index([email,createdAt]) }
-model TradingAccount { id String @id @default(cuid()) userId String mode String @default("PAPER") botState BotState @default(STOPPED) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt user User @relation(fields:[userId],references:[id]) balances Balance[] orders Order[] positions Position[] ledger BalanceLedger[] snapshots EquitySnapshot[] @@unique([userId,mode]) }
-model Balance { id String @id @default(cuid()) accountId String asset String @db.VarChar(16) available Decimal @default(0) @db.Decimal(30,12) reserved Decimal @default(0) @db.Decimal(30,12) updatedAt DateTime @updatedAt account TradingAccount @relation(fields:[accountId],references:[id]) @@unique([accountId,asset]) }
-model MarketCandle { id String @id @default(cuid()) symbol String @db.VarChar(20) interval String @db.VarChar(10) openTime DateTime closeTime DateTime open Decimal @db.Decimal(30,12) high Decimal @db.Decimal(30,12) low Decimal @db.Decimal(30,12) close Decimal @db.Decimal(30,12) volume Decimal @db.Decimal(30,12) @@unique([symbol,interval,openTime]) }
-model Strategy { id String @id @default(cuid()) name String version Int @default(1) active Boolean @default(false) createdAt DateTime @default(now()) configurations StrategyConfiguration[] signals TradingSignal[] }
-model StrategyConfiguration { id String @id @default(cuid()) strategyId String config Json createdAt DateTime @default(now()) strategy Strategy @relation(fields:[strategyId],references:[id]) }
-model TradingSignal { id String @id @default(cuid()) strategyId String accountId String symbol String candleCloseTime DateTime side OrderSide indicatorSnapshot Json createdAt DateTime @default(now()) strategy Strategy @relation(fields:[strategyId],references:[id]) @@unique([strategyId,accountId,symbol,candleCloseTime,side]) }
-model Order { id String @id @default(cuid()) accountId String idempotencyKey String @unique symbol String side OrderSide status OrderStatus @default(PENDING) quantity Decimal @db.Decimal(30,12) requestedPrice Decimal? @db.Decimal(30,12) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt account TradingAccount @relation(fields:[accountId],references:[id]) fills OrderFill[] @@index([accountId,createdAt]) }
-model OrderFill { id String @id @default(cuid()) orderId String quantity Decimal @db.Decimal(30,12) price Decimal @db.Decimal(30,12) fee Decimal @db.Decimal(30,12) feeAsset String executedAt DateTime @default(now()) order Order @relation(fields:[orderId],references:[id]) }
-model Position { id String @id @default(cuid()) accountId String symbol String status PositionStatus @default(OPEN) quantity Decimal @db.Decimal(30,12) avgEntry Decimal @db.Decimal(30,12) realizedPnl Decimal @default(0) @db.Decimal(30,12) openedAt DateTime @default(now()) closedAt DateTime? account TradingAccount @relation(fields:[accountId],references:[id]) @@index([accountId,symbol,status]) }
-model BalanceLedger { id String @id @default(cuid()) accountId String asset String amount Decimal @db.Decimal(30,12) reason String reference String @unique createdAt DateTime @default(now()) account TradingAccount @relation(fields:[accountId],references:[id]) @@index([accountId,createdAt]) }
-model EquitySnapshot { id String @id @default(cuid()) accountId String equity Decimal @db.Decimal(30,12) capturedAt DateTime @default(now()) account TradingAccount @relation(fields:[accountId],references:[id]) @@index([accountId,capturedAt]) }
-model BacktestRun { id String @id @default(cuid()) symbol String parameters Json status String @default("PENDING") initialBalance Decimal @db.Decimal(30,12) finalBalance Decimal? @db.Decimal(30,12) createdAt DateTime @default(now()) trades BacktestTrade[] }
-model BacktestTrade { id String @id @default(cuid()) runId String symbol String side OrderSide quantity Decimal @db.Decimal(30,12) price Decimal @db.Decimal(30,12) fee Decimal @db.Decimal(30,12) executedAt DateTime run BacktestRun @relation(fields:[runId],references:[id]) }
-model BotEvent { id String @id @default(cuid()) level String message String metadata Json? createdAt DateTime @default(now()) @@index([createdAt]) }
-model AuditLog { id String @id @default(cuid()) userId String? action String entity String entityId String? createdAt DateTime @default(now()) user User? @relation(fields:[userId],references:[id]) @@index([createdAt]) }
-model BotConfiguration { id String @id @default(cuid()) key String @unique value Json updatedAt DateTime @updatedAt }
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+enum BotState {
+  STOPPED
+  STARTING
+  RUNNING
+  PAUSED
+  ERROR
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  PENDING
+  FILLED
+  REJECTED
+  CANCELLED
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id String @id @default(cuid())
+  email String @unique @db.VarChar(191)
+  passwordHash String
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  accounts TradingAccount[]
+  sessions Session[]
+  audits AuditLog[]
+}
+
+model Session {
+  id String @id @default(cuid())
+  userId String
+  tokenHash String @unique @db.VarChar(64)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([expiresAt])
+}
+
+model LoginAttempt {
+  id String @id @default(cuid())
+  email String @db.VarChar(191)
+  createdAt DateTime @default(now())
+  @@index([email,createdAt])
+}
+
+model TradingAccount {
+  id String @id @default(cuid())
+  userId String
+  mode String @default("PAPER")
+  botState BotState @default(STOPPED)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields:[userId],references:[id])
+  balances Balance[]
+  orders Order[]
+  positions Position[]
+  ledger BalanceLedger[]
+  snapshots EquitySnapshot[]
+  @@unique([userId,mode])
+}
+
+model Balance {
+  id String @id @default(cuid())
+  accountId String
+  asset String @db.VarChar(16)
+  available Decimal @default(0) @db.Decimal(30,12)
+  reserved Decimal @default(0) @db.Decimal(30,12)
+  updatedAt DateTime @updatedAt
+  account TradingAccount @relation(fields:[accountId],references:[id])
+  @@unique([accountId,asset])
+}
+
+model MarketCandle {
+  id String @id @default(cuid())
+  symbol String @db.VarChar(20)
+  interval String @db.VarChar(10)
+  openTime DateTime
+  closeTime DateTime
+  open Decimal @db.Decimal(30,12)
+  high Decimal @db.Decimal(30,12)
+  low Decimal @db.Decimal(30,12)
+  close Decimal @db.Decimal(30,12)
+  volume Decimal @db.Decimal(30,12)
+  @@unique([symbol,interval,openTime])
+}
+
+model Strategy {
+  id String @id @default(cuid())
+  name String
+  version Int @default(1)
+  active Boolean @default(false)
+  createdAt DateTime @default(now())
+  configurations StrategyConfiguration[]
+  signals TradingSignal[]
+}
+
+model StrategyConfiguration {
+  id String @id @default(cuid())
+  strategyId String
+  config Json
+  createdAt DateTime @default(now())
+  strategy Strategy @relation(fields:[strategyId],references:[id])
+}
+
+model TradingSignal {
+  id String @id @default(cuid())
+  strategyId String
+  accountId String
+  symbol String
+  candleCloseTime DateTime
+  side OrderSide
+  indicatorSnapshot Json
+  createdAt DateTime @default(now())
+  strategy Strategy @relation(fields:[strategyId],references:[id])
+  @@unique([strategyId,accountId,symbol,candleCloseTime,side])
+}
+
+model Order {
+  id String @id @default(cuid())
+  accountId String
+  idempotencyKey String @unique
+  symbol String
+  side OrderSide
+  status OrderStatus @default(PENDING)
+  quantity Decimal @db.Decimal(30,12)
+  requestedPrice Decimal? @db.Decimal(30,12)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  account TradingAccount @relation(fields:[accountId],references:[id])
+  fills OrderFill[]
+  @@index([accountId,createdAt])
+}
+
+model OrderFill {
+  id String @id @default(cuid())
+  orderId String
+  quantity Decimal @db.Decimal(30,12)
+  price Decimal @db.Decimal(30,12)
+  fee Decimal @db.Decimal(30,12)
+  feeAsset String
+  executedAt DateTime @default(now())
+  order Order @relation(fields:[orderId],references:[id])
+}
+
+model Position {
+  id String @id @default(cuid())
+  accountId String
+  symbol String
+  status PositionStatus @default(OPEN)
+  quantity Decimal @db.Decimal(30,12)
+  avgEntry Decimal @db.Decimal(30,12)
+  realizedPnl Decimal @default(0) @db.Decimal(30,12)
+  openedAt DateTime @default(now())
+  closedAt DateTime?
+  account TradingAccount @relation(fields:[accountId],references:[id])
+  @@index([accountId,symbol,status])
+}
+
+model BalanceLedger {
+  id String @id @default(cuid())
+  accountId String
+  asset String
+  amount Decimal @db.Decimal(30,12)
+  reason String
+  reference String @unique
+  createdAt DateTime @default(now())
+  account TradingAccount @relation(fields:[accountId],references:[id])
+  @@index([accountId,createdAt])
+}
+
+model EquitySnapshot {
+  id String @id @default(cuid())
+  accountId String
+  equity Decimal @db.Decimal(30,12)
+  capturedAt DateTime @default(now())
+  account TradingAccount @relation(fields:[accountId],references:[id])
+  @@index([accountId,capturedAt])
+}
+
+model BacktestRun {
+  id String @id @default(cuid())
+  symbol String
+  parameters Json
+  status String @default("PENDING")
+  initialBalance Decimal @db.Decimal(30,12)
+  finalBalance Decimal? @db.Decimal(30,12)
+  createdAt DateTime @default(now())
+  trades BacktestTrade[]
+}
+
+model BacktestTrade {
+  id String @id @default(cuid())
+  runId String
+  symbol String
+  side OrderSide
+  quantity Decimal @db.Decimal(30,12)
+  price Decimal @db.Decimal(30,12)
+  fee Decimal @db.Decimal(30,12)
+  executedAt DateTime
+  run BacktestRun @relation(fields:[runId],references:[id])
+}
+
+model BotEvent {
+  id String @id @default(cuid())
+  level String
+  message String
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  userId String?
+  action String
+  entity String
+  entityId String?
+  createdAt DateTime @default(now())
+  user User? @relation(fields:[userId],references:[id])
+  @@index([createdAt])
+}
+
+model BotConfiguration {
+  id String @id @default(cuid())
+  key String @unique
+  value Json
+  updatedAt DateTime @updatedAt
+}
