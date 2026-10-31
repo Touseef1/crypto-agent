@@ -34,7 +34,7 @@ Open `http://localhost/phpmyadmin`, log in with a MySQL user authorized to acces
 ## Feature status
 - Phase 1: schema, authentication, seed and dashboard foundation implemented in source.
 - Phase 2: BTCUSDT/ETHUSDT Binance public REST snapshots, browser WebSocket trade updates, multi-timeframe candlestick chart, authenticated on-demand candle sync to MySQL with deduplication. Market feed reconnects automatically; candle sync is manual and limited to the most recent 1000 candles per request.
-- Phase 3: automatic paper orders and risk engine **not implemented**.
+- Phase 3: manual paper BUY/SELL execution with virtual balances, fee/slippage simulation, 20% per-order BUY cap, minimum notional, no shorting, serializable database transactions, order history, and RSI/EMA/MACD informational signals. Unattended automated execution, stop-loss/take-profit and portfolio drawdown controls are not yet implemented.
 - Phase 4: backtesting **not implemented**.
 - Phase 5–6: full reporting and stabilization **not implemented**.
 
@@ -43,3 +43,6 @@ Phase 2 usage: sign in and visit /markets; select BTC/ETH and choose “Save his
 
 ## Phase 2 candlestick charts
 Open `/markets` after login and select BTC/USDT or ETH/USDT. Choose 5m, 10m, 15m or 1h. The chart shows OHLC candlesticks (green up / red down), UTC timestamps and hover details. Binance natively supports 5m, 15m and 1h; 10m is derived from complete pairs of UTC-aligned 5m candles. The latest native Binance candle can be incomplete. The **Save historical candles** action still saves closed 5m candles only, independently of the selected chart timeframe. No trading orders are sent.
+
+## Phase 3 — paper trading
+Visit `/trading` after signing in. Select BTCUSDT or ETHUSDT, BUY/SELL and a quantity; review the virtual-funds confirmation before submitting. The server fetches a Binance public quote and simulates 0.1% fee and 0.05% adverse slippage. No real Binance order endpoint or API keys are used. Signals are calculated from **closed 5-minute candles** and never trigger orders automatically. The BUY cap is 20% of available USDT per order, not a full portfolio-risk system. Do not use this version for unattended trading or real money.\n
