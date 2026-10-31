@@ -1,4 +1,4 @@
-# CryptoBot — Phase 1
+# CryptoBot — Phase 2
 
 Personal cryptocurrency **paper-trading** application. **No real trading is implemented.**
 
@@ -33,10 +33,10 @@ Open `http://localhost/phpmyadmin`, log in with a MySQL user authorized to acces
 
 ## Feature status
 - Phase 1: schema, authentication, seed and dashboard foundation implemented in source.
-- Phase 2: Binance market feeds **not implemented**.
+- Phase 2: BTCUSDT/ETHUSDT Binance public REST snapshots, browser WebSocket trade updates, 5-minute historical price chart, authenticated on-demand candle sync to MySQL with deduplication. Market feed reconnects automatically; candle sync is manual and limited to the most recent 1000 candles per request.
 - Phase 3: automatic paper orders and risk engine **not implemented**.
 - Phase 4: backtesting **not implemented**.
 - Phase 5–6: full reporting and stabilization **not implemented**.
 
-Do not start the bot or rely on financial outputs until later phases are implemented and tested.
+Phase 2 usage: sign in and visit /markets; select BTC/ETH and choose “Save historical candles” to persist closed 5-minute candles. Browser needs access to Binance public WebSocket; the server needs outbound access to data-api.binance.vision. No order execution or real trading is enabled. Verify data completeness before using candles for strategy/backtesting.\n\nDo not start the bot or rely on financial outputs until later phases are implemented and tested.
 # crypto-agent
