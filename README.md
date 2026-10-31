@@ -33,10 +33,13 @@ Open `http://localhost/phpmyadmin`, log in with a MySQL user authorized to acces
 
 ## Feature status
 - Phase 1: schema, authentication, seed and dashboard foundation implemented in source.
-- Phase 2: BTCUSDT/ETHUSDT Binance public REST snapshots, browser WebSocket trade updates, 5-minute historical price chart, authenticated on-demand candle sync to MySQL with deduplication. Market feed reconnects automatically; candle sync is manual and limited to the most recent 1000 candles per request.
+- Phase 2: BTCUSDT/ETHUSDT Binance public REST snapshots, browser WebSocket trade updates, multi-timeframe candlestick chart, authenticated on-demand candle sync to MySQL with deduplication. Market feed reconnects automatically; candle sync is manual and limited to the most recent 1000 candles per request.
 - Phase 3: automatic paper orders and risk engine **not implemented**.
 - Phase 4: backtesting **not implemented**.
 - Phase 5–6: full reporting and stabilization **not implemented**.
 
 Phase 2 usage: sign in and visit /markets; select BTC/ETH and choose “Save historical candles” to persist closed 5-minute candles. Browser needs access to Binance public WebSocket; the server needs outbound access to data-api.binance.vision. No order execution or real trading is enabled. Verify data completeness before using candles for strategy/backtesting.\n\nDo not start the bot or rely on financial outputs until later phases are implemented and tested.
 # crypto-agent
+
+## Phase 2 candlestick charts
+Open `/markets` after login and select BTC/USDT or ETH/USDT. Choose 5m, 10m, 15m or 1h. The chart shows OHLC candlesticks (green up / red down), UTC timestamps and hover details. Binance natively supports 5m, 15m and 1h; 10m is derived from complete pairs of UTC-aligned 5m candles. The latest native Binance candle can be incomplete. The **Save historical candles** action still saves closed 5m candles only, independently of the selected chart timeframe. No trading orders are sent.
