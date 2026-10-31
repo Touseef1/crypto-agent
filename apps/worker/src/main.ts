@@ -1,0 +1,1 @@
+if(process.env.TRADING_MODE!=='PAPER'||process.env.LIVE_TRADING_ENABLED!=='false')throw new Error('Unsafe trading configuration');console.log('Worker placeholder: automated execution is NOT implemented in Phase 1.');

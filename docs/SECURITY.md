@@ -1,0 +1,2 @@
+# Security
+Administrator passwords are bcrypt-hashed. Sessions use random tokens; only SHA-256 hashes are stored in MySQL. Cookies are HttpOnly and SameSite=Strict, and Secure in production. Login requests require same-origin and have database-backed per-email throttling. Use HTTPS and a reverse proxy for any non-local deployment. Do not deploy publicly before a full security review. PAPER mode is the only implemented mode.

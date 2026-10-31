@@ -1,0 +1,2 @@
+import { NextResponse } from 'next/server';import { cookies } from 'next/headers';import { hashToken,sameOrigin } from '@/lib/auth';import { prisma } from '@/lib/db';
+export async function POST(req:Request){if(!sameOrigin(req))return NextResponse.json({error:'Invalid origin'},{status:403});const token=(await cookies()).get('cryptobot_session')?.value;if(token)await prisma.session.deleteMany({where:{tokenHash:hashToken(token)}});const res=NextResponse.json({ok:true});res.cookies.delete('cryptobot_session');return res;}
