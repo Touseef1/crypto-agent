@@ -16,7 +16,8 @@ export async function POST(req:NextRequest){
  let input:z.infer<typeof schema>;
  try{input=schema.parse(await req.json());}catch{return NextResponse.json({error:'Invalid parameters'},{status:400});}
  try{
-  const rows=await prisma.marketCandle.findMany({where:{symbol:input.symbol,interval:'5m',closeTime:{lt:new Date()}},orderBy:{openTime:'asc'},take:5000});
+  const rows=await prisma.marketCandle.findMany({where:{symbol:input.symbol,interval:'5m',closeTime:{lt:new Date()}},orderBy:{openTime:'desc'},take:1000});
+  rows.reverse();
   if(rows.length<65)return NextResponse.json({error:'Not enough saved 5m candles. Visit Markets and save historical candles first (minimum 65).'}, {status:400});
   // Reject gaps rather than pretending sparse candles are consecutive.
   for(let i=1;i<rows.length;i++)if(rows[i].openTime.getTime()-rows[i-1].openTime.getTime()!==300000)
