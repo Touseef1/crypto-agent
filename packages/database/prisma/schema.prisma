@@ -168,6 +168,8 @@ model Position {
   quantity Decimal @db.Decimal(30,12)
   avgEntry Decimal @db.Decimal(30,12)
   realizedPnl Decimal @default(0) @db.Decimal(30,12)
+  stopLoss Decimal? @db.Decimal(30,12)
+  takeProfit Decimal? @db.Decimal(30,12)
   openedAt DateTime @default(now())
   closedAt DateTime?
   account TradingAccount @relation(fields:[accountId],references:[id])
