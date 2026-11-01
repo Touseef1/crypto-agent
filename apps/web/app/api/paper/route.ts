@@ -4,7 +4,7 @@ import { getAdmin,sameOrigin } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { paperOrder,PaperTradeError,quote } from '@/lib/paper';
 export const dynamic='force-dynamic';
-const schema=z.object({symbol:z.enum(['BTCUSDT','ETHUSDT']),side:z.enum(['BUY','SELL']),quantity:z.string().regex(/^\\d+(?:\\.\\d{1,8})?$/),key:z.string().min(8).max(100)});
+const schema=z.object({symbol:z.enum(['BTCUSDT','ETHUSDT']),side:z.enum(['BUY','SELL']),quantity:z.string().regex(/^[0-9]+(?:\.[0-9]{1,8})?$/),key:z.string().min(8).max(100)});
 export async function GET(){
   const user=await getAdmin();if(!user)return NextResponse.json({error:'Unauthorized'},{status:401});
   const account=await prisma.tradingAccount.findFirst({where:{userId:user.id,mode:'PAPER'},include:{balances:true,orders:{take:30,orderBy:{createdAt:'desc'},include:{fills:true}}}});
@@ -20,7 +20,8 @@ export async function POST(request:NextRequest){
     const order=await paperOrder({userId:user.id,...input,referencePrice});
     return NextResponse.json({orderId:order.id,status:order.status,fillPrice:order.fills[0]?.price.toString()});
   }catch(e){
-    if(e instanceof z.ZodError||e instanceof PaperTradeError)return NextResponse.json({error:e.message},{status:400});
+    if(e instanceof z.ZodError)return NextResponse.json({error:e.issues.map(issue=>issue.path.join('.')+': '+issue.message).join('; ')},{status:400});
+    if(e instanceof PaperTradeError)return NextResponse.json({error:e.message},{status:400});
     console.error('Paper order error',e);
     return NextResponse.json({error:'Unable to execute paper order'},{status:500});
   }
