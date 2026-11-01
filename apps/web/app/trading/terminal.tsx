@@ -30,7 +30,7 @@ export default function TradingTerminal(){
  useEffect(()=>{void load();},[load]);
  async function submit(){
    const amount=Number(usdtAmount);
-   if(!Number.isFinite(amount)||amount<=0||!/^\\d+(?:\\.\\d{1,8})?$/.test(usdtAmount)){setMessage('Enter a positive USDT amount (up to 8 decimal places).');return;}
+   if(!Number.isFinite(amount)||amount<=0||!/^[0-9]+(?:\.[0-9]{1,8})?$/.test(usdtAmount.trim())){setMessage('Enter a positive USDT amount (up to 8 decimal places).');return;}
    if(!window.confirm('Confirm paper '+side+' for approximately '+usdtAmount+' USDT of '+symbol+'? The server calculates the final coin quantity using a fresh quote.'))return;
    setLoading(true);setMessage('');
    try{
