@@ -14,7 +14,10 @@ export async function GET(){
  const user=await getAdmin();if(!user)return NextResponse.json({error:'Unauthorized'},{status:401});
  const account=await prisma.tradingAccount.findFirst({where:{userId:user.id,mode:'PAPER'},include:{positions:{where:{status:'OPEN'},orderBy:{openedAt:'desc'}}}});
  if(!account)return NextResponse.json({error:'Paper account unavailable'},{status:404});
- return NextResponse.json({positions:account.positions.map(p=>({id:p.id,symbol:p.symbol,quantity:p.quantity.toString(),avgEntry:p.avgEntry.toString(),stopLoss:p.stopLoss?.toString()??null,takeProfit:p.takeProfit?.toString()??null,realizedPnl:p.realizedPnl.toString(),openedAt:p.openedAt}))},{headers:{'Cache-Control':'no-store'}});
+ const prices=await Promise.allSettled(['BTCUSDT','ETHUSDT'].map(s=>quote(s as 'BTCUSDT'|'ETHUSDT')));
+ const current=new Map<string,Prisma.Decimal>();
+ prices.forEach((v,i)=>{if(v.status==='fulfilled')current.set(['BTCUSDT','ETHUSDT'][i],v.value)});
+ return NextResponse.json({positions:account.positions.map(p=>{const market=current.get(p.symbol);return {id:p.id,symbol:p.symbol,quantity:p.quantity.toString(),avgEntry:p.avgEntry.toString(),stopLoss:p.stopLoss?.toString()??null,takeProfit:p.takeProfit?.toString()??null,realizedPnl:p.realizedPnl.toString(),currentPrice:market?.toString()??null,unrealizedPnl:market?market.mul('0.9995').mul('0.999').minus(p.avgEntry).mul(p.quantity).toString():null,openedAt:p.openedAt}})},{headers:{'Cache-Control':'no-store'}});
 }
 export async function POST(req:NextRequest){
  const user=await getAdmin();if(!user)return NextResponse.json({error:'Unauthorized'},{status:401});
