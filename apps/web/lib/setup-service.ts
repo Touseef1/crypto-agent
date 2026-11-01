@@ -18,7 +18,7 @@ export async function getSetup(userId:string,symbol:SymbolName,interval:SetupInt
  const trendCandles=await closedBars(symbol,higher,now);
  const trendValues=trendCandles.map(c=>c.close);
  const e20=ema(trendValues,20).at(-1),e50=ema(trendValues,50).at(-1);
- const trend=trendValues.length>=50&&e20!==undefined&&e50!==undefined?(e20>e50?'UP':'DOWN'):'UNKNOWN';
+ const trend:'UP'|'DOWN'|'UNKNOWN'=trendValues.length>=50&&e20!==undefined&&e50!==undefined?(e20>e50?'UP':'DOWN'):'UNKNOWN';
  const signal=signalFromCandles(candles);
  const account=await prisma.tradingAccount.findFirst({where:{userId,mode:'PAPER'},include:{balances:true,positions:{where:{status:'OPEN'}}}});
  if(!account)throw new Error('Paper account not initialized');
@@ -33,14 +33,15 @@ export async function getSetup(userId:string,symbol:SymbolName,interval:SetupInt
  const dayStart=new Date();dayStart.setUTCHours(0,0,0,0);
  const snapshot=await prisma.equitySnapshot.findFirst({where:{accountId:account.id,capturedAt:{gte:dayStart}},orderBy:{capturedAt:'asc'}});
  if(!snapshot)reasons.push('Daily loss limit cannot be verified: missing equity snapshot');
- const decision=decide(signal,trend,hasPosition,reasons);
+ const action=signal.action==='BUY'||signal.action==='SELL'?signal.action:'HOLD';
+ const decision=decide({...signal,action},trend,hasPosition,reasons);
  const vol=atr(candles);
  const direction=decision.direction;
- const plan=vol&&signal.action!=='HOLD'?levels(last.close,vol,signal.action):null;
+ const plan=vol&&action!=='HOLD'?levels(last.close,vol,action):null;
  const equity=usdt+Number(account.balances.find(b=>b.asset==='BTC')?.available??0)*(symbol==='BTCUSDT'?last.close:0)+Number(account.balances.find(b=>b.asset==='ETH')?.available??0)*(symbol==='ETHUSDT'?last.close:0);
- const sizing=plan&&signal.action==='BUY'?sizeLong(equity,usdt,plan):null;
+ const sizing=plan&&action==='BUY'?sizeLong(equity,usdt,plan):null;
  if(sizing&&sizing.notional<10){decision.direction='NO TRADE';decision.reasons.push('Order value below 10 USDT minimum');}
- const projected=vol&&signal.action!=='HOLD'?projection(last.close,vol,5,signal.action):null;
+ const projected=vol&&action!=='HOLD'?projection(last.close,vol,5,action):null;
  return {symbol,interval,higherInterval:higher,lastClosedTime:last.closeTime,candles,signal,trend,direction:decision.direction,reasons:decision.reasons,levels:plan,projection:projected,sizing,position:hasPosition?{asset,quantity:held,unrealizedPnl:null,reason:'Cost basis unavailable: no verified open position record'}:null,
  historicalStats:null,statsWarning:'Exact-setup backtest sample statistics are unavailable; no accuracy estimate shown.',disclaimer:'Paper trading simulation. Projections are scenarios based on the strategy and past data, not guaranteed outcomes.'};
 }
