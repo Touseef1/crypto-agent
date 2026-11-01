@@ -26,7 +26,7 @@ export async function paperOrder(input:{userId:string;symbol:SymbolName;side:Ord
   const price=input.side==='BUY'?input.referencePrice.mul(new D(1).plus(slippage)):input.referencePrice.mul(new D(1).minus(slippage));
   const gross=qty.mul(price);
   const fee=gross.mul(feeRate);
-  if(gross.lt(minNotional))throw new PaperTradeError('Minimum paper order value is 10 USDT');
+  if(input.side==='BUY'&&gross.lt(minNotional))throw new PaperTradeError('Minimum paper BUY value is 10 USDT');
   return prisma.$transaction(async tx=>{
     const account=await tx.tradingAccount.findFirst({where:{userId:input.userId,mode:'PAPER'}});
     if(!account)throw new PaperTradeError('Paper account not initialized');
