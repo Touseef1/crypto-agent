@@ -20,7 +20,13 @@ export default function TradeSetupChart({candles,levels,projection}:Props){
  if(projection){const last=candles.at(-1)!;const start=Math.floor(last.openTime/1000) as UTCTimestamp;const step=candles.length>1?Math.floor((last.openTime-candles.at(-2)!.openTime)/1000):300;
  const end=(Number(start)+step*5) as UTCTimestamp;
  for(const [value,color,style] of [[projection.midpoint,'#a78bfa',LineStyle.Dotted],[projection.low,'#ef4444',LineStyle.Dotted],[projection.high,'#22c55e',LineStyle.Dotted]] as const){const line=c.addSeries(LineSeries,{color,lineWidth:2,lineStyle:style,priceLineVisible:false,lastValueVisible:false});line.setData([{time:start,value:last.close},{time:end,value}]);overlays.push(line);}}
- return()=>{for(const l of lines)s.removePriceLine(l);for(const overlay of overlays)c.removeSeries(overlay)};
+ return()=>{
+  // The chart-creation effect may have already disposed this instance during
+  // React Strict Mode unmount or Next.js Fast Refresh. Never remove from it twice.
+  if(chart.current!==c||series.current!==s)return;
+  for(const l of lines)s.removePriceLine(l);
+  for(const overlay of overlays)c.removeSeries(overlay);
+ };
  },[candles,levels,projection]);
  return <div><div ref={host} aria-label="Trade setup candlestick chart" className="w-full min-h-[450px]"/><div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500"><span>Entry: gray dashed</span><span>Stop loss: red dashed</span><span>Targets: green dashed</span><span>Projection: purple dotted, range: green/red</span></div><p className="mt-2 text-xs text-amber-600">Projection, not a guarantee. Lines are scenario levels, not executed orders.</p></div>;
 }
