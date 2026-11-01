@@ -7,12 +7,16 @@ type Signal={action:string;price:number;ema20:number;ema50:number;rsi:number;mac
 export default function TradingTerminal(){
  const [symbol,setSymbol]=useState<'BTCUSDT'|'ETHUSDT'>('BTCUSDT');
  const [side,setSide]=useState<'BUY'|'SELL'>('BUY');
- const [quantity,setQuantity]=useState('0.0001');
+ const [usdtAmount,setUsdtAmount]=useState('20');
  const [balances,setBalances]=useState<Balance[]>([]);
  const [orders,setOrders]=useState<Order[]>([]);
  const [signal,setSignal]=useState<Signal|null>(null);
  const [message,setMessage]=useState('');
  const [loading,setLoading]=useState(false);
+ const coin=symbol==='BTCUSDT'?'BTC':'ETH';
+ const coinBalance=Number(balances.find(b=>b.asset===coin)?.available??0);
+ const usdtBalance=Number(balances.find(b=>b.asset==='USDT')?.available??0);
+ const estimatedQuantity=signal?.price&&signal.price>0?Number(usdtAmount)/signal.price:0;
  const load=useCallback(async()=>{
    try{
      const [a,b]=await Promise.all([fetch('/api/paper',{cache:'no-store'}),fetch('/api/paper/signal?symbol='+symbol,{cache:'no-store'})]);
@@ -25,11 +29,13 @@ export default function TradingTerminal(){
  },[symbol]);
  useEffect(()=>{void load();},[load]);
  async function submit(){
-   if(!window.confirm('Confirm '+side+' '+quantity+' '+symbol+' with virtual funds?'))return;
+   const amount=Number(usdtAmount);
+   if(!Number.isFinite(amount)||amount<=0||!/^\\d+(?:\\.\\d{1,8})?$/.test(usdtAmount)){setMessage('Enter a positive USDT amount (up to 8 decimal places).');return;}
+   if(!window.confirm('Confirm paper '+side+' for approximately '+usdtAmount+' USDT of '+symbol+'? The server calculates the final coin quantity using a fresh quote.'))return;
    setLoading(true);setMessage('');
    try{
      const key=crypto.randomUUID();
-     const response=await fetch('/api/paper',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol,side,quantity,key})});
+     const response=await fetch('/api/paper',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol,side,usdtAmount,key})});
      const result=await response.json();
      if(!response.ok)throw new Error(result.error||'Order rejected');
      setMessage('Paper order filled at '+result.fillPrice+' USDT. No real order was sent.');
@@ -45,7 +51,12 @@ export default function TradingTerminal(){
      <section className="rounded-xl bg-[#111c2b] border border-slate-800 p-6"><h2 className="font-semibold text-lg">Manual paper order</h2>
        <label className="block text-sm mt-5 text-slate-300">Pair<select className="block w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mt-2" value={symbol} onChange={e=>setSymbol(e.target.value as 'BTCUSDT'|'ETHUSDT')}><option value="BTCUSDT">BTC/USDT</option><option value="ETHUSDT">ETH/USDT</option></select></label>
        <label className="block text-sm mt-4 text-slate-300">Side<select className="block w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mt-2" value={side} onChange={e=>setSide(e.target.value as 'BUY'|'SELL')}><option>BUY</option><option>SELL</option></select></label>
-       <label className="block text-sm mt-4 text-slate-300">Quantity (BTC or ETH)<input type="number" min="0.00000001" step="0.00000001" value={quantity} onChange={e=>setQuantity(e.target.value)} className="block w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mt-2"/></label>
+       <label className="block text-sm mt-4 text-slate-300">Trade amount (USDT)<input type="number" min="0.01" step="0.01" value={usdtAmount} onChange={e=>setUsdtAmount(e.target.value)} className="block w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mt-2"/></label>
+       <p className="text-xs text-slate-400 mt-2">Available: {usdtBalance.toFixed(2)} USDT · {coinBalance.toFixed(8)} {coin}</p>
+       <p className="text-sm text-cyan-300 mt-3">Estimated quantity: {estimatedQuantity>0?estimatedQuantity.toFixed(8):'—'} {coin}</p>
+       <p className="text-xs text-slate-400 mt-1">Estimate uses the strategy quote; final quantity is calculated on the server from a fresh Binance public price, including simulated fees and slippage.</p>
+       {side==='BUY'&&Number(usdtAmount)>usdtBalance*.2&&<p className="text-xs text-amber-300 mt-2">BUY amount exceeds the 20% available-USDT limit.</p>}
+       {side==='SELL'&&estimatedQuantity>coinBalance&&<p className="text-xs text-amber-300 mt-2">SELL amount exceeds the estimated value of your held {coin}.</p>}
        <p className="text-xs text-slate-400 mt-4">Simulated fee 0.10%, slippage 0.05%, maximum BUY size 20% of available USDT, minimum notional 10 USDT. Market quote is fetched at submission.</p>
        <button disabled={loading} onClick={()=>void submit()} className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 rounded-lg px-5 py-3 mt-5">{loading?'Submitting…':'Place paper '+side}</button>
        {message&&<p role="status" className="text-sm text-cyan-300 mt-4">{message}</p>}
