@@ -30,14 +30,21 @@ export async function paperOrder(input:{userId:string;symbol:SymbolName;side:Ord
   return prisma.$transaction(async tx=>{
     const account=await tx.tradingAccount.findFirst({where:{userId:input.userId,mode:'PAPER'}});
     if(!account)throw new PaperTradeError('Paper account not initialized');
+    // Serialize all order mutations for one account, including monitor exits.
+    await tx.$queryRaw`SELECT id FROM TradingAccount WHERE id = ${account.id} FOR UPDATE`;
     const existing=await tx.order.findUnique({where:{idempotencyKey:input.key},include:{fills:true}});
     if(existing){if(existing.accountId!==account.id)throw new PaperTradeError('Order key already used');return existing;}
+    // Lock balance rows in a consistent order before checking available funds.
+    await tx.$queryRaw`SELECT id FROM Balance WHERE accountId = ${account.id} ORDER BY asset FOR UPDATE`;
     const usdt=await tx.balance.findUnique({where:{accountId_asset:{accountId:account.id,asset:'USDT'}}});
     const coin=await tx.balance.findUnique({where:{accountId_asset:{accountId:account.id,asset}}});
     if(!usdt||!coin)throw new PaperTradeError('Missing paper balances; run seed');
+    await tx.$queryRaw`SELECT id FROM Position WHERE accountId = ${account.id} AND symbol = ${input.symbol} AND status = 'OPEN' FOR UPDATE`;
     const open=await tx.position.findFirst({where:{accountId:account.id,symbol:input.symbol,status:'OPEN'},orderBy:{openedAt:'asc'}});
+    if(input.side==='SELL'&&open&&qty.gt(open.quantity))throw new PaperTradeError('Order exceeds tracked position quantity');
     if(input.side==='BUY'&&open&&((sl&&open.stopLoss&&!sl.eq(open.stopLoss))||(tp&&open.takeProfit&&!tp.eq(open.takeProfit))))throw new PaperTradeError('Existing position has different TP/SL; close it before opening a new bracket');
     if(input.side==='BUY'){
+      if(account.botState==='PAUSED')throw new PaperTradeError('Paper account paused');
       if(sl&&sl.gte(price))throw new PaperTradeError('Stop loss must be below BUY execution price');
       if(tp&&tp.lte(price))throw new PaperTradeError('Take profit must be above BUY execution price');
       const total=gross.plus(fee);
