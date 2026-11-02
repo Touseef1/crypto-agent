@@ -12,7 +12,7 @@ export async function POST(req:NextRequest){
  const positions=await prisma.position.findMany({where:{status:'OPEN',OR:[{stopLoss:{not:null}},{takeProfit:{not:null}}]},include:{account:true}});
  const results:{positionId:string;trigger:string;status:string}[]=[];
  for(const p of positions){
-  if(p.account.mode!=='PAPER'||p.account.botState==='PAUSED')continue;
+  if(p.account.mode!=='PAPER')continue;
   try{
    const price=await quote(p.symbol as 'BTCUSDT'|'ETHUSDT');
    const trigger=p.stopLoss&&price.lte(p.stopLoss)?'SL':p.takeProfit&&price.gte(p.takeProfit)?'TP':null;
