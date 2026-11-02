@@ -41,6 +41,10 @@ export async function paperOrder(input:{userId:string;symbol:SymbolName;side:Ord
     if(!usdt||!coin)throw new PaperTradeError('Missing paper balances; run seed');
     await tx.$queryRaw`SELECT id FROM Position WHERE accountId = ${account.id} AND symbol = ${input.symbol} AND status = 'OPEN' FOR UPDATE`;
     const open=await tx.position.findFirst({where:{accountId:account.id,symbol:input.symbol,status:'OPEN'},orderBy:{openedAt:'asc'}});
+    if(input.side==='SELL'&&input.key.startsWith('bracket:')){
+      const parts=input.key.split(':');
+      if(parts.length!==3||!open||open.id!==parts[1])throw new PaperTradeError('Bracket exit already completed or position changed');
+    }
     if(input.side==='SELL'&&open&&qty.gt(open.quantity))throw new PaperTradeError('Order exceeds tracked position quantity');
     if(input.side==='BUY'&&open&&((sl&&open.stopLoss&&!sl.eq(open.stopLoss))||(tp&&open.takeProfit&&!tp.eq(open.takeProfit))))throw new PaperTradeError('Existing position has different TP/SL; close it before opening a new bracket');
     if(input.side==='BUY'){
