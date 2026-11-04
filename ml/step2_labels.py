@@ -157,7 +157,7 @@ def make_dataset(frame, minute, horizon, tp_atr, sl_atr):
     increments = np.zeros(len(timeline) + 1, dtype=np.int64)
     np.add.at(increments, np.searchsorted(timeline, starts), 1)
     np.add.at(increments, np.searchsorted(timeline, ends), -1)
-    concurrency = np.cumsum(increments)[:-1]
+    # Concurrency is defined on intervals between unique event boundaries.\n    # There are len(timeline)-1 intervals, not len(timeline) points.\n    concurrency = np.cumsum(increments)[:len(timeline) - 1]
     inverse = np.divide(1.0, concurrency, out=np.zeros_like(concurrency, dtype=float), where=concurrency > 0)
     duration = np.diff(timeline).astype(float)
     prefix = np.concatenate(([0.0], np.cumsum(inverse * duration)))
