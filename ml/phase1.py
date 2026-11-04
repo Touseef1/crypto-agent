@@ -123,7 +123,11 @@ def main():
     p.add_argument("--tp-atr",type=float,default=2.)
     p.add_argument("--sl-atr",type=float,default=1.5)
     args=p.parse_args()
-    frame=load_mysql(args.symbol)\n    # Exclude a potentially still-forming last bar; all inputs must be closed.\n    now=pd.Timestamp.now(tz="UTC")\n    frame=frame.loc[frame.index+STEP<=now]\n    validate(frame)
+    frame=load_mysql(args.symbol)
+    # Exclude a potentially still-forming last bar; all inputs must be closed.
+    now=pd.Timestamp.now(tz="UTC")
+    frame=frame.loc[frame.index+STEP<=now]
+    validate(frame)
     features=add_higher_timeframes(frame)
     labels=triple_barrier(frame,features,args.horizon,args.tp_atr,args.sl_atr)
     if labels.empty:raise ValueError("Not enough history to generate labels")
