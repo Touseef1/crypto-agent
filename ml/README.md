@@ -41,3 +41,31 @@ Output is written to `ml/data/<symbol>_5m_phase1.csv` and a JSON manifest. Do **
 ## Scope and next phase
 
 Phase 2: train and evaluate calibrated per-side models using walk-forward splits, with purging and embargo and a buy-and-hold/rule-based baseline. Do not use Phase 1 labels as predictions.
+
+
+## Phase 2 — Offline LightGBM model training and evaluation
+
+This phase uses the Phase 1 CSV datasets already generated locally. It does **not** connect to Binance, execute paper/live trades, or change MySQL.
+
+From the repository root:
+
+```bash
+git pull origin main
+source .venv-ml/bin/activate
+python -m pip install -r ml/requirements.txt
+python -m unittest discover -s ml/tests -v
+python -m ml.phase2 --symbol BTCUSDT
+python -m ml.phase2 --symbol ETHUSDT
+```
+
+Outputs (ignored by Git): `ml/artifacts/phase2/btcusdt/evaluation.json` and `ml/artifacts/phase2/ethusdt/evaluation.json`, plus `long_research.joblib` and `short_research.joblib` from the latest fold.
+
+**Design and limits:**
+- Binary target = `outcome == 1` (TP before SL/timeout); SL and timeout are the negative class. These are *not* profit probabilities or expected-value estimates.
+- Independent LightGBM classifiers for long and short; fixed seed and model hyperparameters.
+- Three expanding-window folds: train 50/60/70% of chronological decisions, calibrate on the following 10%, test on the next 10%. Test windows do not overlap.
+- Purge training/calibration samples whose label exit overlaps the next segment, and enforce a 24-bar (2-hour) embargo at each boundary. This is conservative and uses label exit timestamps from Phase 1.
+- Isotonic calibration fits only the calibration period; test metrics are never used for training or calibration.
+- Compare calibrated Brier score, log loss and ROC-AUC with uncalibrated predictions, constant base-rate and a simple RSI heuristic. Baseline comparisons are classification metrics, **not strategy P&L**.
+- Training is CPU-intensive on two years of data; run symbols one at a time. Saved joblib models are for offline research; do not load untrusted joblib files or wire them into live orders.
+- Phase 2 is complete only after tests pass and both evaluation reports are reviewed. Positive predictive skill does not guarantee profitability. Realistic costs, trading simulation, threshold/EV selection and final untouched holdout are required before deployment.
