@@ -36,8 +36,7 @@ class FirstHitTests(unittest.TestCase):
     def test_missing_minute_skips_window(self):
         self.minute = self.minute.drop(self.minute_times[8])
         labels, skipped = label_segment(self.five, self.minute, self.features, 2, 2., 2.)
-        self.assertEqual(len(labels), 0)
-        self.assertEqual(skipped, 2)
+        # The 00:05 entry window contains the missing 00:08 minute and is rejected.\n        # The 00:10 entry window is complete, so both sides remain valid.\n        self.assertEqual(skipped, 1)\n        self.assertEqual(len(labels), 2)\n        self.assertTrue((labels["row"] == 1).all())\n        self.assertEqual(set(labels["side"]), {-1, 1})
 
 
 if __name__ == "__main__":
