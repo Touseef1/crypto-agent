@@ -5,7 +5,7 @@ from ml.phase1 import FEATURE_COLUMNS
 from ml.phase2 import partitions,metrics,load_dataset
 
 class Phase2Tests(unittest.TestCase):
-    def fixture(self,n=500):
+    def fixture(self,n=2000):
         ts=pd.date_range("2025-01-01",periods=n,freq="5min",tz="UTC")
         data={col:np.ones(n) for col in FEATURE_COLUMNS}
         data.update({"decision_candle_open_utc":ts.astype(str),
