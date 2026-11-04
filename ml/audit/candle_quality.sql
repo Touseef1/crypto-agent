@@ -2,7 +2,7 @@
 -- All timestamps are reported in UTC. Expected spacing: 300 seconds.
 -- Run: mysql -u cryptobot -p cryptobot < ml/audit/candle_quality.sql
 SET time_zone = '+00:00';
-SELECT symbol, interval, COUNT(*) AS stored_rows,
+SELECT symbol, `interval`, COUNT(*) AS stored_rows,
        MIN(openTime) AS first_open_utc, MAX(openTime) AS last_open_utc,
        CASE WHEN COUNT(*)=0 THEN 0 ELSE
          TIMESTAMPDIFF(MINUTE, MIN(openTime), MAX(openTime))/5 + 1 END AS expected_slots,
@@ -10,7 +10,7 @@ SELECT symbol, interval, COUNT(*) AS stored_rows,
          TIMESTAMPDIFF(MINUTE, MIN(openTime), MAX(openTime))/5 + 1 - COUNT(*) END AS missing_slots_estimate
 FROM MarketCandle
 WHERE symbol IN ('BTCUSDT','ETHUSDT') AND `interval`='5m'
-GROUP BY symbol, interval;
+GROUP BY symbol, `interval`;
 -- Exact gaps: use LAG; also flag non-5m-aligned timestamps.
 WITH ordered AS (
  SELECT symbol, openTime,
