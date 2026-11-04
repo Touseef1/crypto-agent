@@ -48,10 +48,16 @@ def validate(frame):
     if frame.empty: raise ValueError("No candles")
     if frame.index.tz is None: raise ValueError("UTC timezone-aware timestamps required")
     if frame.index.has_duplicates or not frame.index.is_monotonic_increasing: raise ValueError("Duplicate or unordered candles")
-    if not (frame.index.to_series().diff().dropna()==STEP).all(): raise ValueError("Missing 5m candles: repair gaps before feature generation")
+    if (frame.index.to_series().diff().dropna() < STEP).any(): raise ValueError("Overlapping or irregular 5m timestamps")
     if not ((frame.index.minute%5==0)&(frame.index.second==0)).all(): raise ValueError("Misaligned 5m timestamps")
     if not np.isfinite(frame[["open","high","low","close","volume"]].to_numpy(dtype=float)).all(): raise ValueError("Nonfinite OHLCV")
     if not ((frame["low"]<=frame[["open","close"]].min(axis=1))&(frame["high"]>=frame[["open","close"]].max(axis=1))&(frame["low"]<=frame["high"])&(frame["low"]>0)&(frame["volume"]>=0)).all(): raise ValueError("Invalid OHLCV")
+
+def continuous_segments(frame):
+    """Split on absent 5m bars; never compute features or labels across a gap."""
+    breaks = frame.index.to_series().diff().ne(STEP)
+    return [part for _, part in frame.groupby(breaks.cumsum(), sort=True)]
+
 
 def add_higher_timeframes(frame):
     x=indicators(frame)
@@ -128,23 +134,43 @@ def main():
     now=pd.Timestamp.now(tz="UTC")
     frame=frame.loc[frame.index+STEP<=now]
     validate(frame)
-    features=add_higher_timeframes(frame)
-    labels=triple_barrier(frame,features,args.horizon,args.tp_atr,args.sl_atr)
-    if labels.empty:raise ValueError("Not enough history to generate labels")
-    rows=labels["row"].to_numpy()
-    dataset=features.iloc[rows][FEATURE_COLUMNS].reset_index().rename(columns={"openTime":"decision_candle_open_utc"})
-    dataset["side"]=labels["side"].to_numpy()
-    dataset["outcome"]=labels["outcome"].to_numpy()
-    dataset["exit_candle_open_utc"]=frame.index.take(labels["exit_row"].to_numpy())
-    dataset["entry"]=labels["entry"].to_numpy()
-    dataset["take_profit"]=labels["take_profit"].to_numpy()
-    dataset["stop_loss"]=labels["stop_loss"].to_numpy()
-    dataset=dataset.replace([np.inf,-np.inf],np.nan).dropna(subset=FEATURE_COLUMNS)
-    if dataset.empty:raise ValueError("No complete feature rows; need more warm-up data")
+    if args.horizon < 1 or args.tp_atr <= 0 or args.sl_atr <= 0:
+        raise ValueError("Invalid barrier parameters")
+    segments=continuous_segments(frame)
+    datasets=[]
+    skipped_short=0
+    for segment in segments:
+        # Recalculate all features and higher-timeframe bars independently.
+        # This also prevents backward asof merges from crossing the gap.
+        if len(segment) <= args.horizon:
+            skipped_short += 1
+            continue
+        features=add_higher_timeframes(segment)
+        labels=triple_barrier(segment,features,args.horizon,args.tp_atr,args.sl_atr)
+        if labels.empty:
+            skipped_short += 1
+            continue
+        rows=labels["row"].to_numpy()
+        part=features.iloc[rows][FEATURE_COLUMNS].reset_index().rename(columns={"openTime":"decision_candle_open_utc"})
+        part["side"]=labels["side"].to_numpy()
+        part["outcome"]=labels["outcome"].to_numpy()
+        part["exit_candle_open_utc"]=segment.index.take(labels["exit_row"].to_numpy())
+        part["entry"]=labels["entry"].to_numpy()
+        part["take_profit"]=labels["take_profit"].to_numpy()
+        part["stop_loss"]=labels["stop_loss"].to_numpy()
+        part=part.replace([np.inf,-np.inf],np.nan).dropna(subset=FEATURE_COLUMNS)
+        if not part.empty:
+            datasets.append(part)
+    if not datasets: raise ValueError("No complete feature rows; need more continuous history")
+    dataset=pd.concat(datasets,ignore_index=True)
+    dataset=dataset.sort_values(["decision_candle_open_utc","side"],kind="stable").reset_index(drop=True)
+    gap_count=len(segments)-1
+    missing_count=sum(int((segments[i].index[0]-segments[i-1].index[-1])/STEP)-1 for i in range(1,len(segments)))
+    print(f"Continuous segments: {len(segments)}; historical gaps: {gap_count}; missing 5m slots: {missing_count}; skipped short segments: {skipped_short}")
     out=Path(args.output_dir);out.mkdir(parents=True,exist_ok=True)
     name=args.symbol.lower()+"_5m_phase1"
     dataset.to_csv(out/(name+".csv"),index=False)
-    meta={"symbol":args.symbol,"rows":len(dataset),"source_candles":len(frame),"first_candle_utc":frame.index[0].isoformat(),"last_candle_utc":frame.index[-1].isoformat(),"feature_columns":FEATURE_COLUMNS,"horizon_5m_bars":args.horizon,"tp_atr":args.tp_atr,"sl_atr":args.sl_atr,"entry":"next candle open","tie_policy":"stop loss first","outcomes":{"1":"TP","-1":"SL","0":"timeout"}}
+    meta={"symbol":args.symbol,"rows":len(dataset),"source_candles":len(frame),"continuous_segments":len(segments),"historical_gaps":gap_count,"missing_5m_slots":missing_count,"skipped_short_segments":skipped_short,"first_candle_utc":frame.index[0].isoformat(),"last_candle_utc":frame.index[-1].isoformat(),"feature_columns":FEATURE_COLUMNS,"horizon_5m_bars":args.horizon,"tp_atr":args.tp_atr,"sl_atr":args.sl_atr,"entry":"next candle open","tie_policy":"stop loss first","outcomes":{"1":"TP","-1":"SL","0":"timeout"}}
     (out/(name+".json")).write_text(json.dumps(meta,indent=2)+"\n")
-    print(json.dumps({"output":str(out/(name+".csv")),"rows":len(dataset),"source_candles":len(frame)},indent=2))
+    print(json.dumps({"output":str(out/(name+".csv")),"rows":len(dataset),"source_candles":len(frame),"continuous_segments":len(segments),"historical_gaps":gap_count,"missing_5m_slots":missing_count},indent=2))
 if __name__=="__main__":main()
