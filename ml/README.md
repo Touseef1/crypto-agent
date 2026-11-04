@@ -1,56 +1,43 @@
-# Phase 0 — Candle storage audit (no ML training)
+# Phase 1 — Offline feature engineering and triple-barrier labeling
 
-## Verified from source
-- `MarketCandle` stores symbol, interval, openTime, closeTime, OHLC and volume as MySQL DECIMAL(30,12).
-- `@@unique([symbol,interval,openTime])` prevents duplicate stored timestamps.
-- `apps/web/lib/market.ts` retrieves Binance public klines and `persistClosedCandles` writes only interval `5m` with `skipDuplicates:true`.
-- `apps/web/app/api/market/sync/route.ts` fetches at most 1,000 recent candles per request. It does not implement a complete historical backfill or gap repair.
-- `apps/web/app/api/backtests/route.ts` uses the newest 1,000 closed stored 5m candles, rejects non-consecutive open times, and runs long-only next-open simulation.
-- `apps/web/lib/setup-service.ts` obtains 5m/15m/1h/4h closed bars from public Binance directly; these higher-timeframe bars are not persisted by the current sync function.
+Phase 1 is **paper/research only**. It does not train a model, modify MySQL, call Binance, or execute orders.
 
-## Execute read-only audit
+## Setup (from repository root)
+
 ```bash
-cd ~/Downloads/cryptobot-phase1/cryptobot
 git pull origin main
-mysql -u cryptobot -p cryptobot < ml/audit/candle_quality.sql | tee phase0-candle-audit.txt
-```
-Replace database/user names if different. Do not share database passwords. This file contains SELECT statements only.
-
-## Interpretation
-- Date range: `first_open_utc` to `last_open_utc`.
-- `missing_slots_estimate`: expected 5-minute slots minus stored rows within each symbol's stored range.
-- Gap detail: every consecutive timestamp difference greater than 300 seconds; `missing_candles` is the count of absent 5-minute intervals.
-- Duplicate query should return no rows due to unique constraint.
-- Invalid OHLCV and misalignment queries should return no rows.
-- No row for a symbol means no stored 5m candles for that symbol; it does **not** mean zero missing candles.
-- The script does not count missing candles before the first stored row or after the last stored row. Choose an explicit intended historical range for that audit.
-
-## Data risks
-1. Only 1,000 recent 5m candles are fetched per sync (~83h20m); repeated sync does not build years of reliable history without scheduling and range backfill.
-2. `parseCandles` silently deduplicates API rows; store quality counters before deduplication in a later phase.
-3. No source endpoint, ingestion timestamp, exchange dataset revision, or checksum fields are stored per candle.
-4. Higher timeframe features must use **completed** 1h/4h bars whose closeTime is at or before each 5m decision timestamp.
-5. Existing backtester uses numeric floating point internally; ML features can use float after validated ingestion, but order accounting should stay Decimal.
-6. The current database has not been queried by this audit; actual counts and ranges are unknown until the SQL is executed.
-
-## Proposed folder layout
-```text
-ml/
-  README.md
-  audit/candle_quality.sql
-  data/                 # ignored raw exports; never commit sensitive data
-  features/             # Phase 1 indicators and time-safe joins
-  labels/               # Phase 1 long/short triple-barrier labels
-  training/             # Phase 2 walk-forward and calibration
-  inference/            # Phase 3 ONNX export and contracts
-  tests/
-  artifacts/            # model versions and reproducibility metadata
-packages/core/src/ml/   # shared TS prediction types, Phase 3
-apps/web/app/api/ml/    # prediction API, Phase 3
+python3 -m venv .venv-ml
+source .venv-ml/bin/activate
+pip install -r ml/requirements.txt
+python -m unittest discover -s ml/tests -v
 ```
 
-## Acceptance criteria for Phase 0
-- Run the SQL against the real MySQL database.
-- Save results for BTCUSDT and ETHUSDT: first/last UTC timestamps, stored count, expected slots, missing slots, exact gap locations, duplicates, invalid OHLCV, alignment.
-- Decide target historical training period and gap-repair method.
-- **Do not start Phase 1** until the quality report has been reviewed.
+Set DATABASE_URL from your existing local environment **without publishing the password**. The Python process needs a valid `mysql://USER:PASSWORD@HOST:PORT/cryptobot` URL. For example, load your existing `.env` securely using your normal local environment management. The account needs only SELECT on MarketCandle.
+
+```bash
+python -m ml.phase1 --symbol BTCUSDT
+python -m ml.phase1 --symbol ETHUSDT
+```
+
+Output is written to `ml/data/<symbol>_5m_phase1.csv` and a JSON manifest. Do **not** commit generated datasets or database credentials.
+
+## Definitions
+
+- Source: ordered, gap-free, closed 5m candles from MySQL. If the newest candle is still open, wait for it to close before generating a production research dataset.
+- Decision: close of candle i. Features are known at that time, including the current completed 5m bar.
+- Entry: next candle open (i+1). No same-bar entry.
+- Labels: long (+1 side) and short (-1 side), separately. Outcome +1 = TP first, -1 = SL first, 0 = neither within horizon.
+- Default horizon = 24 bars (2 hours); TP = 2 × ATR14; SL = 1.5 × ATR14. ATR is calculated at decision time.
+- If TP and SL are touched within the same OHLC candle, assume **SL first**; intrabar ordering is unknowable.
+- Higher timeframes: 1h and 4h built from **complete groups** of 5m candles, joined only after the higher-timeframe bar closes.
+- Feature warm-up and trailing horizon rows are removed. Features do not use future bars, while labels intentionally do.
+- Labels currently do **not** include trading fees, slippage, funding, or a precise intrabar execution path. Phase 2/5 must account for costs and realistic execution.
+- No time-based train/test split is performed in Phase 1; chronological purged walk-forward validation belongs to Phase 2.
+
+## Quality checks
+
+`validate()` rejects missing 5m timestamps, duplicates, bad ordering, non-UTC input, nonfinite OHLCV, misaligned timestamps, and invalid price ranges. Run `ml/audit/candle_quality.sql` before extraction. Check the output manifest and row counts.
+
+## Scope and next phase
+
+Phase 2: train and evaluate calibrated per-side models using walk-forward splits, with purging and embargo and a buy-and-hold/rule-based baseline. Do not use Phase 1 labels as predictions.
